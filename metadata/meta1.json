@@ -1,0 +1,26 @@
+{
+    "infiles": {
+        "s3":
+            [
+                "file1",
+                "file2"
+            ],
+        "efs":
+            [
+                "input/file1",
+                "input/file2"
+            ]
+    },
+    "outfiles": {
+        "s3":
+            [
+                "file1",
+                "file2"
+            ],
+        "efs":
+            [
+                "output/file1",
+                "output/file2"
+            ]
+    }
+}

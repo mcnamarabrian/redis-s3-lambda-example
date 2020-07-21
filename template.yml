@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: 'redis-s3-lambda-example'
+
+Parameters:
+  VpcId:
+    Description: 'The VPC used to run the solution'
+    Type: String
+
+  SubnetId:
+    Description: 'The subnet to be used with Amazon ElastiCache and AWS Lambda'
+    Type: String
+
+Resources:
+  MetadataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-metadata-bucket"
+  
+  InputBucket:
+    Type: AWS::S3::Bucket
+  
+  OutputBucket:
+    Type: AWS::S3::Bucket
+
+  S3ToRedisSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: redis-s3-lambda-example-transfer-function
+      GroupDescription: redis-s3-lambda-example-transfer-function
+      VpcId: !Ref VpcId
+  
+  S3ToRedis:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Transfer data stored in ElastiCache or S3 to another S3 bucket
+      Handler: index.handler
+      CodeUri: ./src/s3_to_redis/
+      Runtime: python3.8
+      Timeout: 30
+      MemorySize: 1024
+      Tracing: Active
+      VpcConfig:
+        SecurityGroupIds: 
+          - !GetAtt S3ToRedisSecurityGroup.GroupId
+        SubnetIds:
+          - !Ref SubnetId
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          POWERTOOLS_SERVICE_NAME: redis-s3-lambda-example
+          REDIS_HOST: !GetAtt RedisCluster.RedisEndpoint.Address
+          REDIS_PORT: !GetAtt RedisCluster.RedisEndpoint.Port
+          INPUT_BUCKET: !Ref InputBucket
+          OUTPUT_BUCKET: !Ref OutputBucket
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetObjectAcl
+                - s3:GetObjectVersion
+              Resource: 
+                - !Sub 'arn:aws:s3:::${AWS::StackName}-metadata-bucket/*'
+                - !Sub 'arn:aws:s3:::${InputBucket}/*'
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource: 
+                - !Sub 'arn:aws:s3:::${AWS::StackName}-metadata-bucket'
+                - !Sub 'arn:aws:s3:::${InputBucket}'
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource:
+                - !Sub 'arn:aws:s3:::${OutputBucket}/*'
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - ec2:CreateNetworkInterface
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DeleteNetworkInterface
+              Resource: '*'
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+                - xray:GetSamplingRules
+                - xray:GetSamplingTargets
+                - xray:GetSamplingStatisticSummaries
+              Resource: '*'
+      Events:
+        S3BucketEvent:
+          Type: S3
+          Properties:
+            Bucket: !Ref MetadataBucket
+            Events:
+              - 's3:ObjectCreated:*'
+
+  ElastiCacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: Cache Subnet Group
+      SubnetIds:
+      - !Ref SubnetId
+
+  RedisClusterSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: redis-s3-lambda-example
+      GroupDescription: ElastiCache Redis Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 6379
+          ToPort: 6379
+      VpcId: !Ref VpcId
+ 
+  RedisCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      CacheSubnetGroupName: !Ref ElastiCacheSubnetGroup
+      CacheNodeType: cache.m5.large       
+      ClusterName: redis-s3-lambda-example
+      VpcSecurityGroupIds: 
+        - !GetAtt RedisClusterSecurityGroup.GroupId
+      Engine: redis
+      NumCacheNodes: '1'
+
+Outputs:
+
+  RedisHost:
+    Description: ElastiCache Endpoint
+    Value: !GetAtt RedisCluster.RedisEndpoint.Address
+
+  ElastiCachePort:
+    Description: ElastiCache Port
+    Value: !GetAtt RedisCluster.RedisEndpoint.Port 
+
+  ElastiCacheSG:
+    Description: ElastiCache SecurityGroup Id
+    Value: !Ref RedisClusterSecurityGroup
+
+  MetadataBucket:
+    Value: !Ref MetadataBucket
+  
+  InputS3Bucket:
+    Value: !Ref InputBucket
+  
+  OutputBucket:
+    Value: !Ref OutputBucket
+ 

@@ -1,0 +1,9 @@
+*pyc
+
+raw_data/
+
+.aws-sam/
+
+samconfig.toml
+
+venv
