@@ -4,7 +4,7 @@ The purpose of this project is to highlight how to use Amazon Elasticache (Redis
 
 The simple example uses data stored in *metadata* files to determine the objects to download.  The raw data stored used for the transfers is stored in the *InputBucket*.
 
-A 2-member Elasticache Redis cluster is created in the same subnet that is associated with the VPC-enabled Lambda Function.
+A single-node Elasticache Redis host is created in the same subnet that is associated with the VPC-enabled Lambda Function.
 
 # Dependencies
 
@@ -52,7 +52,7 @@ done
 
 ```bash
 for num in 1 2 3; do
-    echo "Creating 10m file at raw_data/file${num}" && dd if=/dev/zero of=raw_data/file${num} bs=bs=10240000 count=1
+    echo "Creating 10m file at raw_data/file${num}" && dd if=/dev/zero of=raw_data/file${num} bs=10240000 count=1
 done
 ```
 
